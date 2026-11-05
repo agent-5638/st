@@ -85,6 +85,7 @@ typedef struct {
 	int cw; /* char width  */
 	int mode; /* window state/mode flags */
 	int cursor; /* cursor style */
+	int cur1, cur2, cur3, cur4; /* original fork's pixel thicknesses */
 } TermWindow;
 
 typedef struct {
@@ -1031,6 +1032,10 @@ xloadfonts(const char *fontstr, double fontsize)
 	/* Setting character width and height. */
 	win.cw = ceilf(dc.font.width + (2 * add_x_space));
 	win.ch = ceilf(dc.font.height + (2 * add_y_space));
+	win.cur1 = ceil(cursorthickness_factor1 * (float)win.cw);
+	win.cur2 = ceil(cursorthickness_factor2 * (float)win.ch);
+	win.cur3 = ceil(cursorthickness_factor3 * (float)win.ch);
+	win.cur4 = ceil(cursorthickness_factor4 * (float)win.ch);
 
 	FcPatternDel(pattern, FC_SLANT);
 	FcPatternAddInteger(pattern, FC_SLANT, FC_SLANT_ITALIC);
@@ -1525,86 +1530,64 @@ xdrawglyph(Glyph g, int x, int y)
 void
 xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og)
 {
-	Color drawcol;
+	Color drawcol, drawcol2;
+	int wx, w, sx1;
 
-	/* remove the old cursor */
+	/* The old row is made dirty by draw(), so this only needs to restore
+	 * the previous cursor cell. Redrawing the row also erases long strokes. */
 	if (selected(ox, oy))
 		og.mode ^= ATTR_REVERSE;
 	xdrawglyph(og, ox, oy);
 
-	if (IS_SET(MODE_HIDE))
-		return;
-
-	/*
-	 * Select the right color for the right mode.
-	 */
+	/* Keep the original fork's cursor colors even for selected cells. */
 	g.mode &= ATTR_BOLD|ATTR_ITALIC|ATTR_UNDERLINE|ATTR_STRUCK|ATTR_WIDE;
-
 	if (IS_SET(MODE_REVERSE)) {
 		g.mode |= ATTR_REVERSE;
 		g.bg = defaultfg;
-		if (selected(cx, cy)) {
-			drawcol = dc.col[defaultcs];
-			g.fg = defaultrcs;
-		} else {
-			drawcol = dc.col[defaultrcs];
-			g.fg = defaultcs;
-		}
+		drawcol = dc.col[defaultrcs];
+		g.fg = defaultcs;
 	} else {
-		if (selected(cx, cy)) {
-			g.fg = defaultfg;
-			g.bg = defaultrcs;
-		} else {
-			g.fg = defaultbg;
-			g.bg = defaultcs;
-		}
+		g.fg = defaultbg;
+		g.bg = defaultcs;
 		drawcol = dc.col[g.bg];
 	}
+	drawcol2 = dc.col[defaultcs2];
 
-	/* draw the new one */
-	if (IS_SET(MODE_FOCUSED)) {
-		switch (win.cursor) {
-		case 7: /* st extension */
-			g.u = 0x2603; /* snowman (U+2603) */
-			/* FALLTHROUGH */
-		case 0: /* Blinking Block */
-		case 1: /* Blinking Block (Default) */
-		case 2: /* Steady Block */
-			xdrawglyph(g, cx, cy);
-			break;
-		case 3: /* Blinking Underline */
-		case 4: /* Steady Underline */
-			XftDrawRect(xw.draw, &drawcol,
-					borderpx + cx * win.cw,
-					borderpx + (cy + 1) * win.ch - \
-						cursorthickness,
-					win.cw, cursorthickness);
-			break;
-		case 5: /* Blinking bar */
-		case 6: /* Steady bar */
-			XftDrawRect(xw.draw, &drawcol,
-					borderpx + cx * win.cw,
-					borderpx + cy * win.ch,
-					cursorthickness, win.ch);
-			break;
-		}
-	} else {
-		XftDrawRect(xw.draw, &drawcol,
-				borderpx + cx * win.cw,
-				borderpx + cy * win.ch,
-				win.cw - 1, 1);
-		XftDrawRect(xw.draw, &drawcol,
-				borderpx + cx * win.cw,
-				borderpx + cy * win.ch,
-				1, win.ch - 1);
-		XftDrawRect(xw.draw, &drawcol,
-				borderpx + (cx + 1) * win.cw - 1,
-				borderpx + cy * win.ch,
-				1, win.ch - 1);
-		XftDrawRect(xw.draw, &drawcol,
-				borderpx + cx * win.cw,
-				borderpx + (cy + 1) * win.ch - 1,
-				win.cw, 1);
+	if (IS_SET(MODE_HIDE))
+		return;
+
+	/* Retain the exact rectangle arithmetic of the original cursor:
+	 * quarter of the full window width, rounded DOWN to whole cells. */
+	wx = win.cw * cx;
+	w = win.w / 4;
+	w -= w % win.cw;
+	sx1 = wx - w;
+	w = 2 * w + win.cw;
+	XftDrawRect(xw.draw, &drawcol, sx1 - add_x_space,
+			borderpx - add_y_space + cy * win.ch, w, win.cur3);
+	XftDrawRect(xw.draw, &drawcol, sx1 - add_x_space,
+			borderpx + add_y_space - win.cur3 + (cy + 1) * win.ch,
+			w, win.cur3);
+
+	/* Steady block: green cell, with horizontal strokes drawn first.
+	 * Other styles retain the original fork's magenta cursor geometry. */
+	switch (win.cursor) {
+	case 2:
+		xdrawglyph(g, cx, cy);
+		break;
+	default:
+		XftDrawRect(xw.draw, &drawcol2,
+				borderpx - add_x_space + cx * win.cw,
+				borderpx + cy * win.ch, win.cur1, win.ch);
+		XftDrawRect(xw.draw, &drawcol2,
+				borderpx - add_x_space + cx * win.cw,
+				borderpx + add_y_space - win.cur4 + (cy + 1) * win.ch,
+				win.cw, win.cur4);
+		XftDrawRect(xw.draw, &drawcol2,
+				borderpx - add_x_space + cx * win.cw,
+				borderpx - add_y_space + cy * win.ch,
+				win.cw, win.cur2);
+		break;
 	}
 }
 

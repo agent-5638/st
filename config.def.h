@@ -67,7 +67,14 @@ static unsigned int blinktimeout = 0;
 /*
  * thickness of underline and bar cursors
  */
-static unsigned int cursorthickness = 2;
+/* Thicknesses are relative to the character cell, not the font itself. */
+static float cursorthickness_factor1 = 6e-2;
+static float cursorthickness_factor2 = 12e-2;
+static float cursorthickness_factor3 = 12e-2;
+static float cursorthickness_factor4 = 25e-2;
+
+/* The original cursor's second color, for non-block cursor shapes. */
+static unsigned int defaultcs2 = 258;
 
 /*
  * bell volume. It must be a value between -100 and 100. Use 0 for disabling

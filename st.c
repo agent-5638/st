@@ -2694,6 +2694,8 @@ draw(void)
 	if (cx > 0 && (term.line[term.c.y][cx].mode & ATTR_WDUMMY))
 		cx--;
 
+	/* The extended cursor can leave strokes outside its old cell. */
+	term.dirty[term.ocy] = 1;
 	drawregion(0, 0, term.col, term.row);
 	xdrawcursor(cx, term.c.y, term.line[term.c.y][cx],
 			term.ocx, term.ocy, term.line[term.ocy][term.ocx]);
