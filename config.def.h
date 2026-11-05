@@ -25,9 +25,11 @@ char *stty_args = "stty raw pass8 nl -echo -iexten -cstopb 38400";
 /* identification sequence returned in DA and DECID */
 char *vtiden = "\033[?6c";
 
-/* Kerning / character bounding-box multipliers */
-static float cwscale = 1.0;
-static float chscale = 1.0;
+/* Extra pixels on each side of the font's cell. The vertical margin is
+ * also used to clear the custom cursor's overhanging horizontal strokes.
+ * Keep these integer offsets for the fork's original pixel geometry. */
+static int add_x_space = 0;
+static int add_y_space = 1;
 
 /*
  * word delimiter string
