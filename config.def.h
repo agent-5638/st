@@ -5,8 +5,8 @@
  *
  * font: see http://freedesktop.org/software/fontconfig/fontconfig-user.html
  */
-static char *font = "Liberation Mono:pixelsize=12:antialias=true:autohint=true";
-static int borderpx = 2;
+static char *font = "Anonymous Pro:pixelsize=16:antialias=true:autohint=true";
+static int borderpx = 0;
 
 /*
  * What program is execed by st depends of these precedence rules:
@@ -25,9 +25,11 @@ char *stty_args = "stty raw pass8 nl -echo -iexten -cstopb 38400";
 /* identification sequence returned in DA and DECID */
 char *vtiden = "\033[?6c";
 
-/* Kerning / character bounding-box multipliers */
-static float cwscale = 1.0;
-static float chscale = 1.0;
+/* Extra pixels on each side of the font's cell. The vertical margin is
+ * also used to clear the custom cursor's overhanging horizontal strokes.
+ * Keep these integer offsets for the fork's original pixel geometry. */
+static int add_x_space = 0;
+static int add_y_space = 1;
 
 /*
  * word delimiter string
@@ -60,12 +62,19 @@ static double maxlatency = 33;
  * blinking timeout (set to 0 to disable blinking) for the terminal blinking
  * attribute.
  */
-static unsigned int blinktimeout = 800;
+static unsigned int blinktimeout = 0;
 
 /*
  * thickness of underline and bar cursors
  */
-static unsigned int cursorthickness = 2;
+/* Thicknesses are relative to the character cell, not the font itself. */
+static float cursorthickness_factor1 = 6e-2;
+static float cursorthickness_factor2 = 12e-2;
+static float cursorthickness_factor3 = 12e-2;
+static float cursorthickness_factor4 = 25e-2;
+
+/* The original cursor's second color, for non-block cursor shapes. */
+static unsigned int defaultcs2 = 258;
 
 /*
  * bell volume. It must be a value between -100 and 100. Use 0 for disabling
@@ -91,46 +100,45 @@ char *termname = "st-256color";
  *
  *	stty tabs
  */
-unsigned int tabspaces = 8; /* must be > 0 */
+unsigned int tabspaces = 4; /* must be > 0 */
 
 /* Terminal colors (16 first used in escape sequence) */
 static const char *colorname[] = {
 	/* 8 normal colors */
 	"black",
 	"red3",
-	"green3",
-	"yellow3",
-	"blue2",
-	"magenta3",
+	"#005f00",
+	"#ff5f00",
+	"#00005f",
+	"#5f005f",
 	"cyan3",
 	"gray90",
 
 	/* 8 bright colors */
-	"gray50",
-	"red",
-	"green",
-	"yellow",
-	"#5c5cff",
-	"magenta",
-	"cyan",
-	"white",
+	"#111111",
+	"#ff0000",
+	"#00ff00",
+	"#ffff00",
+	"#0000ff",
+	"#ff00ff",
+	"#00ffff",
+	"#ffffff",
 
 	[255] = 0,
 
-	/* more colors can be added after 255 to use with DefaultXX */
-	"#cccccc",
-	"#555555",
-	"gray90", /* default foreground colour */
-	"black", /* default background colour */
+	/* Custom cursor colors (keep the fork's palette indices). */
+	[256] = "#00ff44", /* cursor background and long strokes */
+	[257] = "#ff00cc", /* cursor reverse color */
+	[258] = "#ff00ff", /* alternative cursor geometry */
+	[259] = "#00ff00", /* reserved alternative reverse cursor */
 };
-
 
 /*
  * Default colors (colorname index)
  * foreground, background, cursor, reverse cursor
  */
-unsigned int defaultfg = 258;
-unsigned int defaultbg = 259;
+unsigned int defaultfg = 7;
+unsigned int defaultbg = 0;
 unsigned int defaultcs = 256;
 static unsigned int defaultrcs = 257;
 
@@ -147,8 +155,8 @@ static unsigned int cursorshape = 2;
  * Default columns and rows numbers
  */
 
-static unsigned int cols = 80;
-static unsigned int rows = 24;
+static unsigned int cols = 240;
+static unsigned int rows = 96;
 
 /*
  * Default colour and shape of the mouse cursor
@@ -195,7 +203,7 @@ static Shortcut shortcuts[] = {
 	{ XK_ANY_MOD,           XK_Print,       printsel,       {.i =  0} },
 	{ TERMMOD,              XK_Prior,       zoom,           {.f = +1} },
 	{ TERMMOD,              XK_Next,        zoom,           {.f = -1} },
-	{ TERMMOD,              XK_Home,        zoomreset,      {.f =  0} },
+	{ TERMMOD,              XK_parenright,  zoomreset,      {.f =  0} },
 	{ TERMMOD,              XK_C,           clipcopy,       {.i =  0} },
 	{ TERMMOD,              XK_V,           clippaste,      {.i =  0} },
 	{ TERMMOD,              XK_Y,           selpaste,       {.i =  0} },
